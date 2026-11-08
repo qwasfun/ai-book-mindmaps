@@ -1,0 +1,566 @@
+(function () {
+  "use strict";
+
+  const state = {
+    booksIndex: null,
+    currentBook: null,
+    currentType: "special", // 'special' | 'part' | 'chapter'
+    currentId: "overview",
+    currentMarkdown: "",
+    currentTitleText: "",
+    searchQuery: "",
+    selectedCharacter: "",
+    markmapInstance: null,
+    transformer: null,
+    currentRoot: null,
+  };
+
+  const TOP_CHARACTERS = [
+    "全部",
+    "西门庆",
+    "潘金莲",
+    "李瓶儿",
+    "春梅",
+    "吴月娘",
+    "孟玉楼",
+    "陈敬济",
+    "应伯爵",
+    "武松",
+    "王六儿",
+    "孙雪娥",
+    "宋蕙莲",
+    "玳安",
+  ];
+
+  // DOM Elements
+  const els = {
+    bookSelector: document.getElementById("bookSelector"),
+    bookTitle: document.getElementById("bookTitle"),
+    bookAuthor: document.getElementById("bookAuthor"),
+    bookDesc: document.getElementById("bookDesc"),
+    bookStats: document.getElementById("bookStats"),
+    specialNavList: document.getElementById("specialNavList"),
+    partsNavList: document.getElementById("partsNavList"),
+    chaptersNavList: document.getElementById("chaptersNavList"),
+    chapterCountBadge: document.getElementById("chapterCountBadge"),
+    chapterSearch: document.getElementById("chapterSearch"),
+    clearSearchBtn: document.getElementById("clearSearchBtn"),
+    charFilterBar: document.getElementById("charFilterBar"),
+    currentBadge: document.getElementById("currentBadge"),
+    currentTitle: document.getElementById("currentTitle"),
+    prevItemBtn: document.getElementById("prevItemBtn"),
+    nextItemBtn: document.getElementById("nextItemBtn"),
+    markmapSvg: document.getElementById("markmapSvg"),
+    mindmapWrapper: document.getElementById("mindmapWrapper"),
+    currentSummaryBox: document.getElementById("currentSummaryBox"),
+    currentCharactersBox: document.getElementById("currentCharactersBox"),
+    markdownPreview: document.getElementById("markdownPreview"),
+    sidebar: document.getElementById("sidebar"),
+    sidebarToggle: document.getElementById("sidebarToggle"),
+    outlineDrawer: document.getElementById("outlineDrawer"),
+    outlineToggleBtn: document.getElementById("outlineToggleBtn"),
+    closeDrawerBtn: document.getElementById("closeDrawerBtn"),
+    quickTabs: document.getElementById("quickTabs"),
+    zoomInBtn: document.getElementById("zoomInBtn"),
+    zoomOutBtn: document.getElementById("zoomOutBtn"),
+    fitViewBtn: document.getElementById("fitViewBtn"),
+    expandAllBtn: document.getElementById("expandAllBtn"),
+    collapseLevelBtn: document.getElementById("collapseLevelBtn"),
+    fullscreenBtn: document.getElementById("fullscreenBtn"),
+    exportMdBtn: document.getElementById("exportMdBtn"),
+    themeToggleBtn: document.getElementById("themeToggleBtn"),
+  };
+
+  // Initialize Markmap Transformer
+  function initMarkmapEngine() {
+    if (window.markmap && window.markmap.Transformer) {
+      state.transformer = new window.markmap.Transformer();
+    }
+  }
+
+  // Simple Markdown to HTML for the right-side reading drawer
+  function renderMarkdownToHtml(md) {
+    if (!md) return "";
+    const lines = md.split("\n");
+    let html = "";
+    let inList = false;
+
+    for (let rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      const formatted = line
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\$\\rightarrow\$/g, " → ");
+
+      if (formatted.startsWith("# ")) {
+        if (inList) { html += "</ul>"; inList = false; }
+        html += `<h1>${formatted.slice(2)}</h1>`;
+      } else if (formatted.startsWith("## ")) {
+        if (inList) { html += "</ul>"; inList = false; }
+        html += `<h2>${formatted.slice(3)}</h2>`;
+      } else if (formatted.startsWith("### ")) {
+        if (inList) { html += "</ul>"; inList = false; }
+        html += `<h3>${formatted.slice(4)}</h3>`;
+      } else if (formatted.startsWith("- ")) {
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += `<li>${formatted.slice(2)}</li>`;
+      }
+    }
+    if (inList) html += "</ul>";
+    return html;
+  }
+
+  // Render Markdown into Interactive Markmap SVG
+  function renderMindmap(md, collapseDepth = 0) {
+    if (!state.transformer || ! window.markmap) {
+      els.currentTitle.textContent = "正在等待导图组件加载...";
+      return;
+    }
+
+    const cleanMd = md.replace(/\$\\rightarrow\$/g, "→");
+    const { root } = state.transformer.transform(cleanMd);
+
+    if (collapseDepth > 0) {
+      setCollapseDepth(root, 1, collapseDepth);
+    }
+
+    state.currentRoot = root;
+
+    if (!state.markmapInstance) {
+      const { Markmap } = window.markmap;
+      state.markmapInstance = Markmap.create(els.markmapSvg, {
+        autoFit: true,
+        duration: 320,
+        maxWidth: 340,
+        paddingX: 16,
+        spacingVertical: 8,
+        spacingHorizontal: 68,
+      }, root);
+    } else {
+      state.markmapInstance.setData(root);
+      state.markmapInstance.fit();
+    }
+  }
+
+  function setCollapseDepth(node, currentDepth, maxDepth) {
+    if (!node) return;
+    if (node.payload) {
+      node.payload.fold = currentDepth >= maxDepth ? 1 : 0;
+    }
+    if (node.children && node.children.length > 0) {
+      for (const child of node.children) {
+        setCollapseDepth(child, currentDepth + 1, maxDepth);
+      }
+    }
+  }
+
+  // Load Books Catalog
+  async function loadCatalog() {
+    initMarkmapEngine();
+    try {
+      const res = await fetch("data/books.json");
+      state.booksIndex = await res.json();
+
+      els.bookSelector.innerHTML = state.booksIndex.books
+        .map((b) => `<option value="${b.id}">${b.title} (${b.totalChapters}回)</option>`)
+        .join("");
+
+      if (state.booksIndex.books.length > 0) {
+        await loadBook(state.booksIndex.books[0].dataUrl);
+      }
+    } catch (err) {
+      console.error("Failed to load books catalog:", err);
+      els.currentTitle.textContent = "加载图书目录失败，请通过 HTTP 服务访问";
+    }
+  }
+
+  // Load Single Book Dataset
+  async function loadBook(dataUrl) {
+    try {
+      const res = await fetch(dataUrl);
+      const book = await res.json();
+      state.currentBook = book;
+
+      // Render Book Meta Card
+      els.bookTitle.textContent = book.title;
+      els.bookAuthor.textContent = book.author;
+      els.bookDesc.textContent = book.description;
+      els.bookStats.innerHTML = [
+        `<span class="stat-chip">共 ${book.totalChapters} 回</span>`,
+        `<span class="stat-chip">约 ${(book.totalWords / 10000).toFixed(1)} 万字</span>`,
+        ...book.tags.map((t) => `<span class="stat-chip">${t}</span>`),
+      ].join("");
+
+      renderCharacterFilters();
+      renderNavigationLists();
+
+      // Check URL Hash or default to overview
+      if (!applyUrlHash()) {
+        selectMapItem("special", "overview");
+      }
+    } catch (err) {
+      console.error("Failed to load book JSON:", err);
+    }
+  }
+
+  // Character filter tags
+  function renderCharacterFilters() {
+    els.charFilterBar.innerHTML = TOP_CHARACTERS.map((ch) => {
+      const val = ch === "全部" ? "" : ch;
+      const isActive = state.selectedCharacter === val ? "active" : "";
+      return `<button class="char-tag ${isActive}" data-char="${val}">${ch}</button>`;
+    }).join("");
+
+    els.charFilterBar.querySelectorAll(".char-tag").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.selectedCharacter = btn.dataset.char;
+        renderCharacterFilters();
+        renderChaptersList();
+      });
+    });
+  }
+
+  // Render All Sidebar Lists
+  function renderNavigationLists() {
+    const book = state.currentBook;
+    if (!book) return;
+
+    // 1. Special Maps
+    els.specialNavList.innerHTML = book.specialMaps
+      .map(
+        (m) => `
+      <button class="nav-item" data-type="special" data-id="${m.id}">
+        <div class="nav-item-top">
+          <span class="nav-item-num">${m.badge}</span>
+          <span class="nav-item-title">${m.title}</span>
+        </div>
+        <div class="nav-item-sub">${m.description}</div>
+      </button>
+    `
+      )
+      .join("");
+
+    // 2. Parts (5 Volumes)
+    els.partsNavList.innerHTML = book.parts
+      .map(
+        (p, idx) => `
+      <button class="nav-item" data-type="part" data-id="${p.id}">
+        <div class="nav-item-top">
+          <span class="nav-item-num">第${idx + 1}卷</span>
+          <span class="nav-item-title">第 ${p.range[0]}–${p.range[1]} 回脉络导图</span>
+        </div>
+        <div class="nav-item-sub">${p.subtitle}</div>
+      </button>
+    `
+      )
+      .join("");
+
+    // 3. Chapters (1-100)
+    renderChaptersList();
+
+    // Attach click handlers for special & parts
+    els.specialNavList.querySelectorAll(".nav-item").forEach((item) => {
+      item.addEventListener("click", () => selectMapItem("special", item.dataset.id));
+    });
+    els.partsNavList.querySelectorAll(".nav-item").forEach((item) => {
+      item.addEventListener("click", () => selectMapItem("part", item.dataset.id));
+    });
+  }
+
+  function renderChaptersList() {
+    const book = state.currentBook;
+    if (!book) return;
+
+    const q = state.searchQuery.trim().toLowerCase();
+    const charFilter = state.selectedCharacter;
+
+    const filtered = book.chapters.filter((ch) => {
+      if (charFilter && !ch.characters.some((c) => c.includes(charFilter))) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        ch.h1.toLowerCase().includes(q) ||
+        ch.title.toLowerCase().includes(q) ||
+        ch.summary.toLowerCase().includes(q) ||
+        ch.characters.some((c) => c.toLowerCase().includes(q)) ||
+        String(ch.num) === q
+      );
+    });
+
+    els.chapterCountBadge.textContent = `${filtered.length} / ${book.chapters.length}回`;
+
+    els.chaptersNavList.innerHTML = filtered
+      .map(
+        (ch) => `
+      <button class="nav-item ${
+        state.currentType === "chapter" && String(state.currentId) === String(ch.num)
+          ? "active"
+          : ""
+      }" data-type="chapter" data-id="${ch.num}">
+        <div class="nav-item-top">
+          <span class="nav-item-num">${ch.h1}</span>
+          <span class="nav-item-title">${ch.title}</span>
+        </div>
+        <div class="nav-item-sub">${ch.summary}</div>
+      </button>
+    `
+      )
+      .join("");
+
+    els.chaptersNavList.querySelectorAll(".nav-item").forEach((item) => {
+      item.addEventListener("click", () => selectMapItem("chapter", item.dataset.id));
+    });
+  }
+
+  // Select and Display a Mindmap
+  function selectMapItem(type, id) {
+    const book = state.currentBook;
+    if (!book) return;
+
+    state.currentType = type;
+    state.currentId = String(id);
+
+    let badge = "";
+    let title = "";
+    let summary = "";
+    let chars = [];
+    let md = "";
+    let defaultCollapse = 0;
+
+    if (type === "special") {
+      const m = book.specialMaps.find((x) => x.id === id) || book.specialMaps[0];
+      badge = m.badge;
+      title = `${book.title} · ${m.title}`;
+      summary = m.description;
+      md = m.markdown;
+    } else if (type === "part") {
+      const p = book.parts.find((x) => x.id === id) || book.parts[0];
+      badge = `分卷导图 (${p.range[0]}-${p.range[1]}回)`;
+      title = p.title;
+      summary = p.summary;
+      md = p.markdown;
+      defaultCollapse = 3; // fold chapter details initially on 20-chapter part map for clarity
+    } else if (type === "chapter") {
+      const num = parseInt(id, 10);
+      const ch = book.chapters.find((x) => x.num === num) || book.chapters[0];
+      badge = ch.h1;
+      title = `${ch.h1}：${ch.title}`;
+      summary = ch.summary;
+      chars = ch.characters || [];
+      md = ch.markdown;
+    }
+
+    state.currentMarkdown = md;
+    state.currentTitleText = title;
+
+    // Update Header & Outline Drawer
+    els.currentBadge.textContent = badge;
+    els.currentTitle.textContent = title;
+    els.currentSummaryBox.innerHTML = `<strong>核心导读：</strong>${summary}`;
+
+    if (chars.length > 0) {
+      els.currentCharactersBox.innerHTML = chars
+        .map((c) => `<span class="char-pill" data-char="${c}" title="点击筛选该人物相关章节">👤 ${c}</span>`)
+        .join("");
+      els.currentCharactersBox.querySelectorAll(".char-pill").forEach((pill) => {
+        pill.addEventListener("click", () => {
+          state.selectedCharacter = pill.dataset.char;
+          renderCharacterFilters();
+          renderChaptersList();
+        });
+      });
+    } else {
+      els.currentCharactersBox.innerHTML = "";
+    }
+
+    els.markdownPreview.innerHTML = renderMarkdownToHtml(md);
+
+    // Highlight active nav item
+    document.querySelectorAll(".nav-item").forEach((el) => {
+      const isMatch =
+        el.dataset.type === state.currentType && String(el.dataset.id) === state.currentId;
+      el.classList.toggle("active", isMatch);
+      if (isMatch) {
+        el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    });
+
+    // Highlight topbar quick tabs
+    els.quickTabs.querySelectorAll(".tab-btn").forEach((btn) => {
+      if (state.currentType === "special") {
+        btn.classList.toggle(
+          "active",
+          btn.dataset.type === "special" && btn.dataset.id === state.currentId
+        );
+      } else if (state.currentType === "part") {
+        btn.classList.toggle("active", btn.dataset.type === "part");
+      } else if (state.currentType === "chapter") {
+        btn.classList.toggle("active", btn.dataset.type === "chapter");
+      }
+    });
+
+    updateStepButtons();
+    renderMindmap(md, defaultCollapse);
+
+    // Update URL Hash without scrolling
+    history.replaceState(null, "", `#${type}/${id}`);
+  }
+
+  // Prev / Next sequential navigation
+  function getOrderedSequence() {
+    const book = state.currentBook;
+    if (!book) return [];
+    const seq = [];
+    book.specialMaps.forEach((m) => seq.push({ type: "special", id: m.id }));
+    book.parts.forEach((p) => seq.push({ type: "part", id: p.id }));
+    book.chapters.forEach((c) => seq.push({ type: "chapter", id: String(c.num) }));
+    return seq;
+  }
+
+  function updateStepButtons() {
+    const seq = getOrderedSequence();
+    const idx = seq.findIndex(
+      (x) => x.type === state.currentType && String(x.id) === state.currentId
+    );
+    els.prevItemBtn.disabled = idx <= 0;
+    els.nextItemBtn.disabled = idx === -1 || idx >= seq.length - 1;
+  }
+
+  function stepNavigate(delta) {
+    const seq = getOrderedSequence();
+    const idx = seq.findIndex(
+      (x) => x.type === state.currentType && String(x.id) === state.currentId
+    );
+    const target = seq[idx + delta];
+    if (target) {
+      selectMapItem(target.type, target.id);
+    }
+  }
+
+  function applyUrlHash() {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return false;
+    const [type, id] = hash.split("/");
+    if (type && id) {
+      selectMapItem(type, id);
+      return true;
+    }
+    return false;
+  }
+
+  // Bind UI Events
+  function bindEvents() {
+    // Search input
+    els.chapterSearch.addEventListener("input", (e) => {
+      state.searchQuery = e.target.value;
+      els.clearSearchBtn.classList.toggle("hidden", !state.searchQuery);
+      renderChaptersList();
+    });
+
+    els.clearSearchBtn.addEventListener("click", () => {
+      els.chapterSearch.value = "";
+      state.searchQuery = "";
+      els.clearSearchBtn.classList.add("hidden");
+      renderChaptersList();
+    });
+
+    // Quick Tabs
+    els.quickTabs.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectMapItem(btn.dataset.type, btn.dataset.id);
+      });
+    });
+
+    // Prev / Next buttons
+    els.prevItemBtn.addEventListener("click", () => stepNavigate(-1));
+    els.nextItemBtn.addEventListener("click", () => stepNavigate(1));
+
+    // Sidebar & Outline Drawer Toggles
+    els.sidebarToggle.addEventListener("click", () => {
+      els.sidebar.classList.toggle("collapsed");
+      setTimeout(() => state.markmapInstance && state.markmapInstance.fit(), 280);
+    });
+
+    els.outlineToggleBtn.addEventListener("click", () => {
+      els.outlineDrawer.classList.toggle("collapsed");
+      els.outlineToggleBtn.classList.toggle(
+        "active",
+        !els.outlineDrawer.classList.contains("collapsed")
+      );
+      setTimeout(() => state.markmapInstance && state.markmapInstance.fit(), 280);
+    });
+
+    els.closeDrawerBtn.addEventListener("click", () => {
+      els.outlineDrawer.classList.add("collapsed");
+      els.outlineToggleBtn.classList.remove("active");
+      setTimeout(() => state.markmapInstance && state.markmapInstance.fit(), 280);
+    });
+
+    // Canvas Controls
+    els.zoomInBtn.addEventListener("click", () => {
+      if (state.markmapInstance) state.markmapInstance.rescale(1.25);
+    });
+    els.zoomOutBtn.addEventListener("click", () => {
+      if (state.markmapInstance) state.markmapInstance.rescale(0.8);
+    });
+    els.fitViewBtn.addEventListener("click", () => {
+      if (state.markmapInstance) state.markmapInstance.fit();
+    });
+    els.expandAllBtn.addEventListener("click", () => {
+      renderMindmap(state.currentMarkdown, 0);
+    });
+    els.collapseLevelBtn.addEventListener("click", () => {
+      renderMindmap(state.currentMarkdown, 2);
+    });
+    els.fullscreenBtn.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        els.mindmapWrapper.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+
+    // Export Markdown
+    els.exportMdBtn.addEventListener("click", () => {
+      if (!state.currentMarkdown) return;
+      const blob = new Blob([state.currentMarkdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${state.currentTitleText.replace(/[\\/:*?"<>|]/g, "_")}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Theme Switcher
+    els.themeToggleBtn.addEventListener("click", () => {
+      const html = document.documentElement;
+      const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      html.setAttribute("data-theme", next);
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+      if (e.key === "ArrowLeft") {
+        stepNavigate(-1);
+      } else if (e.key === "ArrowRight") {
+        stepNavigate(1);
+      } else if (e.key.toLowerCase() === "b") {
+        els.sidebarToggle.click();
+      } else if (e.key.toLowerCase() === "f") {
+        if (state.markmapInstance) state.markmapInstance.fit();
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (state.markmapInstance) state.markmapInstance.fit();
+    });
+  }
+
+  // Boot Application
+  bindEvents();
+  loadCatalog();
+})();

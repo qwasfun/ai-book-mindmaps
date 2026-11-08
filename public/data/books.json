@@ -1,0 +1,27 @@
+{
+  "siteTitle": "AI 读书思维导图馆",
+  "siteSubtitle": "结构化拆解经典名著 · 全景交互式知识图谱",
+  "updatedAt": "2026-11-09",
+  "books": [
+    {
+      "id": "jinpingmei-chongzhen",
+      "title": "金瓶梅（崇祯本）",
+      "subtitle": "绣像批评全本 · 一百回全景交互思维导图",
+      "author": "（明）兰陵笑笑生",
+      "category": "中国古典文学",
+      "totalChapters": 100,
+      "totalWords": 734115,
+      "tags": [
+        "明代世情",
+        "崇祯本",
+        "百回全本",
+        "人物图谱",
+        "逐回精析"
+      ],
+      "coverColor": "#8b1e24",
+      "accentColor": "#d4a359",
+      "description": "中国文学史上第一部文人独立创作的长篇白话世情章回小说。本导图库涵盖《金瓶梅（崇祯本）》全书总览、人物关系与宿命图谱、艺术与历史专题、五卷阶段脉络以及全部一百回逐回精细思维导图。",
+      "dataUrl": "data/jinpingmei-chongzhen.json"
+    }
+  ]
+}

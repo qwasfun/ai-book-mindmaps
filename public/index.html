@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 读书思维导图馆 | 经典名著全景交互式知识图谱</title>
+  <meta name="description" content="使用 AI 深度拆解本地电子书，生成全书总览、人物关系图谱、分卷脉络与逐章交互式 HTML 思维导图。" />
+  <link rel="stylesheet" href="assets/style.css" />
+  <!-- Markmap / D3 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17.2/dist/browser/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.17.2/dist/browser/index.iife.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button id="sidebarToggle" class="icon-btn" title="展开/收起目录栏 (快捷键: B)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <div class="brand">
+          <span class="brand-badge">MINDMAP</span>
+          <h1 class="brand-title">AI 读书思维导图馆</h1>
+        </div>
+        <div class="book-switcher-wrap">
+          <label for="bookSelector" class="sr-only">选择图书</label>
+          <select id="bookSelector" class="book-selector" title="切换馆藏图书"></select>
+        </div>
+      </div>
+
+      <div class="topbar-center">
+        <div class="view-tabs" id="quickTabs">
+          <button class="tab-btn active" data-type="special" data-id="overview">全书总览</button>
+          <button class="tab-btn" data-type="special" data-id="characters">人物关系与终局</button>
+          <button class="tab-btn" data-type="special" data-id="themes">社会与版本艺术</button>
+          <button class="tab-btn" data-type="part" data-id="part-1">五卷脉络</button>
+          <button class="tab-btn" data-type="chapter" data-id="1">百回逐章精析</button>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <button id="outlineToggleBtn" class="pill-btn" title="切换大纲详情面板">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+          <span>导读大纲</span>
+        </button>
+        <button id="exportMdBtn" class="icon-btn" title="下载当前思维导图 Markdown 源文件">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+        <button id="themeToggleBtn" class="icon-btn" title="切换深色/浅色宣纸主题">
+          <svg id="themeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="main-layout">
+      <!-- Left Sidebar Navigation -->
+      <aside class="sidebar" id="sidebar">
+        <div class="book-meta-card" id="bookMetaCard">
+          <div class="book-meta-header">
+            <h2 id="bookTitle">加载中...</h2>
+            <span class="book-author" id="bookAuthor"></span>
+          </div>
+          <p class="book-desc" id="bookDesc"></p>
+          <div class="book-stats" id="bookStats"></div>
+        </div>
+
+        <!-- Search & Character Filter -->
+        <div class="search-panel">
+          <div class="search-input-wrap">
+            <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="chapterSearch" placeholder="搜索回目、人物、事件 (如: 武松 / 官哥 / 李瓶儿)..." autocomplete="off" />
+            <button id="clearSearchBtn" class="clear-btn hidden" title="清除搜索">&times;</button>
+          </div>
+          <div class="char-tags" id="charFilterBar"></div>
+        </div>
+
+        <!-- Navigation List -->
+        <div class="nav-scroll" id="navScroll">
+          <div class="nav-section">
+            <div class="nav-section-title">全景专题导图</div>
+            <div id="specialNavList" class="nav-list"></div>
+          </div>
+
+          <div class="nav-section">
+            <div class="nav-section-title">分卷脉络导图 (每卷20回)</div>
+            <div id="partsNavList" class="nav-list"></div>
+          </div>
+
+          <div class="nav-section">
+            <div class="nav-section-title">
+              <span>逐回精细导图</span>
+              <span id="chapterCountBadge" class="count-badge">100回</span>
+            </div>
+            <div id="chaptersNavList" class="nav-list"></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Mindmap Canvas -->
+      <main class="canvas-stage">
+        <!-- Current Map Info Bar -->
+        <div class="stage-header">
+          <div class="stage-title-group">
+            <span class="stage-badge" id="currentBadge">核心必读</span>
+            <h2 class="stage-title" id="currentTitle">正在加载思维导图...</h2>
+          </div>
+          <div class="stage-nav-btns">
+            <button id="prevItemBtn" class="nav-step-btn" title="上一章/上一图 (快捷键: ←)">
+              <span>&larr; 上一图</span>
+            </button>
+            <button id="nextItemBtn" class="nav-step-btn" title="下一章/下一图 (快捷键: →)">
+              <span>下一图 &rarr;</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- SVG Mindmap Container -->
+        <div class="mindmap-wrapper" id="mindmapWrapper">
+          <svg id="markmapSvg" class="markmap-svg"></svg>
+
+          <!-- Floating Mindmap Controls -->
+          <div class="canvas-controls">
+            <button id="zoomInBtn" class="ctrl-btn" title="放大 (Zoom In)">+</button>
+            <button id="zoomOutBtn" class="ctrl-btn" title="缩小 (Zoom Out)">&minus;</button>
+            <button id="fitViewBtn" class="ctrl-btn" title="居中适配画布 (Fit View)">适配</button>
+            <span class="ctrl-divider"></span>
+            <button id="expandAllBtn" class="ctrl-btn" title="展开全部节点">全展开</button>
+            <button id="collapseLevelBtn" class="ctrl-btn" title="折叠至二级核心节点">精简层级</button>
+            <button id="fullscreenBtn" class="ctrl-btn" title="全屏专注阅读">全屏</button>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right Reading & Outline Drawer -->
+      <aside class="outline-drawer" id="outlineDrawer">
+        <div class="drawer-header">
+          <h3>章节导读与结构大纲</h3>
+          <button id="closeDrawerBtn" class="icon-btn" title="关闭面板">&times;</button>
+        </div>
+        <div class="drawer-body">
+          <div id="currentSummaryBox" class="summary-card"></div>
+          <div id="currentCharactersBox" class="chars-box"></div>
+          <div class="markdown-preview" id="markdownPreview"></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

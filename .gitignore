@@ -1,0 +1,26 @@
+# Ignore local e-books and raw book source files (NEVER upload to GitHub or Cloudflare Pages)
+books/
+*.epub
+*.mobi
+*.azw3
+*.pdf
+*.txt
+!requirements.txt
+!robots.txt
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
