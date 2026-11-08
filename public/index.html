@@ -2,7 +2,9 @@
 <html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#161922" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>AI 读书思维导图馆 | 经典名著全景交互式知识图谱</title>
   <meta name="description" content="使用 AI 深度拆解本地电子书，生成全书总览、人物关系图谱、分卷脉络与逐章交互式 HTML 思维导图。" />
   <link rel="stylesheet" href="assets/style.css" />
@@ -78,6 +80,7 @@
 
     <!-- Main Content Area -->
     <div class="main-layout">
+      <div class="backdrop" id="backdrop"></div>
       <!-- Left Sidebar Navigation -->
       <aside class="sidebar" id="sidebar">
         <div class="book-meta-card" id="bookMetaCard">
@@ -134,10 +137,10 @@
           </div>
           <div class="stage-nav-btns">
             <button id="prevItemBtn" class="nav-step-btn" title="上一章/上一图 (快捷键: ←)">
-              <span>&larr; 上一图</span>
+              <span>&larr;</span><span class="btn-label"> 上一图</span>
             </button>
             <button id="nextItemBtn" class="nav-step-btn" title="下一章/下一图 (快捷键: →)">
-              <span>下一图 &rarr;</span>
+              <span class="btn-label">下一图 </span><span>&rarr;</span>
             </button>
           </div>
         </div>

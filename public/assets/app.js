@@ -69,7 +69,48 @@
     fullscreenBtn: document.getElementById("fullscreenBtn"),
     exportMdBtn: document.getElementById("exportMdBtn"),
     themeToggleBtn: document.getElementById("themeToggleBtn"),
+    backdrop: document.getElementById("backdrop"),
   };
+
+  // ===== Mobile helpers =====
+  const mobileMq = window.matchMedia("(max-width: 768px)");
+  const isMobile = () => mobileMq.matches;
+
+  function refitLater() {
+    setTimeout(() => state.markmapInstance && state.markmapInstance.fit(), 280);
+  }
+
+  function syncPanelsUi() {
+    const sidebarOpen = !els.sidebar.classList.contains("collapsed");
+    const drawerOpen = !els.outlineDrawer.classList.contains("collapsed");
+    els.outlineToggleBtn.classList.toggle("active", drawerOpen);
+    els.backdrop.classList.toggle("show", isMobile() && (sidebarOpen || drawerOpen));
+  }
+
+  function setSidebar(open) {
+    els.sidebar.classList.toggle("collapsed", !open);
+    if (open && isMobile()) els.outlineDrawer.classList.add("collapsed");
+    syncPanelsUi();
+    refitLater();
+  }
+
+  function setDrawer(open) {
+    els.outlineDrawer.classList.toggle("collapsed", !open);
+    if (open && isMobile()) els.sidebar.classList.add("collapsed");
+    syncPanelsUi();
+    refitLater();
+  }
+
+  function applyResponsiveLayout() {
+    if (isMobile()) {
+      els.sidebar.classList.add("collapsed");
+      els.outlineDrawer.classList.add("collapsed");
+    } else {
+      els.sidebar.classList.remove("collapsed");
+      els.outlineDrawer.classList.toggle("collapsed", window.innerWidth <= 1100);
+    }
+    syncPanelsUi();
+  }
 
   // Initialize Markmap Transformer
   function initMarkmapEngine() {
@@ -134,10 +175,10 @@
         {
           autoFit: true,
           duration: 320,
-          maxWidth: 360,
-          paddingX: 16,
-          spacingVertical: 8,
-          spacingHorizontal: 68,
+          maxWidth: isMobile() ? 230 : 360,
+          paddingX: isMobile() ? 10 : 16,
+          spacingVertical: isMobile() ? 6 : 8,
+          spacingHorizontal: isMobile() ? 40 : 68,
         },
         root
       );
@@ -461,6 +502,11 @@
     updateStepButtons();
     renderMindmap(md, defaultCollapse);
 
+    // 移动端选中后自动收起目录抽屉
+    if (isMobile() && !els.sidebar.classList.contains("collapsed")) {
+      setSidebar(false);
+    }
+
     // Update URL Hash with bookId
     history.replaceState(null, "", `#${book.id}/${type}/${id}`);
   }
@@ -543,23 +589,24 @@
 
     // Sidebar & Outline Drawer Toggles
     els.sidebarToggle.addEventListener("click", () => {
-      els.sidebar.classList.toggle("collapsed");
-      setTimeout(() => state.markmapInstance && state.markmapInstance.fit(), 280);
+      setSidebar(els.sidebar.classList.contains("collapsed"));
     });
 
     els.outlineToggleBtn.addEventListener("click", () => {
-      els.outlineDrawer.classList.toggle("collapsed");
-      els.outlineToggleBtn.classList.toggle(
-        "active",
-        !els.outlineDrawer.classList.contains("collapsed")
-      );
-      setTimeout(() => state.markmapInstance && state.markmapInstance.fit(), 280);
+      setDrawer(els.outlineDrawer.classList.contains("collapsed"));
     });
 
-    els.closeDrawerBtn.addEventListener("click", () => {
+    els.closeDrawerBtn.addEventListener("click", () => setDrawer(false));
+
+    els.backdrop.addEventListener("click", () => {
+      els.sidebar.classList.add("collapsed");
       els.outlineDrawer.classList.add("collapsed");
-      els.outlineToggleBtn.classList.remove("active");
-      setTimeout(() => state.markmapInstance && state.markmapInstance.fit(), 280);
+      syncPanelsUi();
+    });
+
+    mobileMq.addEventListener("change", () => {
+      applyResponsiveLayout();
+      refitLater();
     });
 
     // Canvas Controls
@@ -627,6 +674,7 @@
   }
 
   // Boot Application
+  applyResponsiveLayout();
   bindEvents();
   loadCatalog();
 })();

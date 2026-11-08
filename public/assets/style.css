@@ -729,9 +729,32 @@ html[data-theme="light"] .char-tag.active {
   color: var(--text-primary);
 }
 
+/* Backdrop for off-canvas panels (mobile) */
+.backdrop {
+  display: none;
+}
+
+/* ========== Tablet (≤1100px) ========== */
 @media (max-width: 1100px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px 0;
+    row-gap: 6px;
+  }
   .topbar-center {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .topbar-center::-webkit-scrollbar {
     display: none;
+  }
+  .view-tabs {
+    width: max-content;
   }
   .outline-drawer {
     position: absolute;
@@ -742,12 +765,197 @@ html[data-theme="light"] .char-tag.active {
   }
 }
 
+/* ========== Mobile (≤768px) ========== */
 @media (max-width: 768px) {
+  body,
+  .app-shell {
+    height: 100dvh;
+  }
+
+  .topbar {
+    padding: calc(6px + env(safe-area-inset-top)) 10px 0;
+    gap: 8px;
+  }
+  .topbar-left {
+    flex: 1;
+    min-width: 0;
+    gap: 8px;
+  }
+  .topbar-right {
+    gap: 6px;
+  }
+  .brand-title,
+  #exportMdBtn {
+    display: none;
+  }
+  .book-switcher-wrap {
+    flex: 1;
+    min-width: 0;
+  }
+  .book-selector {
+    width: 100%;
+    text-overflow: ellipsis;
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+  .pill-btn {
+    height: 36px;
+    padding: 0 10px;
+  }
+  .pill-btn span {
+    display: none;
+  }
+  .tab-btn {
+    padding: 6px 11px;
+    font-size: 12.5px;
+  }
+
+  /* Left sidebar → off-canvas drawer */
   .sidebar {
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
+    width: 86vw;
+    min-width: 0;
+    max-width: 360px;
     box-shadow: var(--shadow-lg);
+    z-index: 40;
+  }
+  .sidebar.collapsed {
+    margin-left: -100vw;
+  }
+  .nav-item {
+    padding: 10px 12px;
+  }
+  .char-tags {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .char-tags::-webkit-scrollbar {
+    display: none;
+  }
+  .char-tag {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  #chapterSearch {
+    font-size: 16px; /* 防止 iOS 聚焦时自动放大 */
+  }
+
+  /* Right outline drawer → bottom sheet */
+  .outline-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    min-width: 0;
+    height: 62dvh;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+    border-radius: 14px 14px 0 0;
+    transition: transform 0.25s ease;
+    z-index: 40;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .outline-drawer.collapsed {
+    margin-right: 0;
+    transform: translateY(105%);
+  }
+  .drawer-header {
+    height: 46px;
+    position: relative;
+  }
+  .drawer-header::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-color);
+  }
+  .drawer-body {
+    padding: 12px 14px 20px;
+  }
+
+  .backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+    z-index: 30;
+  }
+  .backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Stage header */
+  .stage-header {
+    height: auto;
+    min-height: 44px;
+    padding: 6px 10px;
+    gap: 8px;
+  }
+  .stage-title-group {
+    gap: 6px;
+    min-width: 0;
+  }
+  .stage-badge {
+    font-size: 10.5px;
+    padding: 2px 6px;
+    max-width: 38vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .stage-title {
+    font-size: 13.5px;
+  }
+  .nav-step-btn {
+    width: 34px;
+    height: 32px;
+    padding: 0;
+    font-size: 15px;
+  }
+  .nav-step-btn .btn-label {
+    display: none;
+  }
+
+  /* Mindmap */
+  .markmap-foreign {
+    font-size: 13px;
+  }
+  .canvas-controls {
+    left: 8px;
+    right: 8px;
+    transform: none;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    overflow-x: auto;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    padding: 5px 6px;
+  }
+  .canvas-controls::-webkit-scrollbar {
+    display: none;
+  }
+  .ctrl-btn {
+    flex-shrink: 0;
+    padding: 7px 11px;
+    font-size: 12.5px;
   }
 }
