@@ -15,7 +15,7 @@
     currentRoot: null,
   };
 
-  const TOP_CHARACTERS = [
+  const DEFAULT_CHARACTERS = [
     "全部",
     "西门庆",
     "潘金莲",
@@ -113,7 +113,7 @@
 
   // Render Markdown into Interactive Markmap SVG
   function renderMindmap(md, collapseDepth = 0) {
-    if (!state.transformer || ! window.markmap) {
+    if (!state.transformer || !window.markmap) {
       els.currentTitle.textContent = "正在等待导图组件加载...";
       return;
     }
@@ -129,14 +129,18 @@
 
     if (!state.markmapInstance) {
       const { Markmap } = window.markmap;
-      state.markmapInstance = Markmap.create(els.markmapSvg, {
-        autoFit: true,
-        duration: 320,
-        maxWidth: 340,
-        paddingX: 16,
-        spacingVertical: 8,
-        spacingHorizontal: 68,
-      }, root);
+      state.markmapInstance = Markmap.create(
+        els.markmapSvg,
+        {
+          autoFit: true,
+          duration: 320,
+          maxWidth: 360,
+          paddingX: 16,
+          spacingVertical: 8,
+          spacingHorizontal: 68,
+        },
+        root
+      );
     } else {
       state.markmapInstance.setData(root);
       state.markmapInstance.fit();
@@ -163,11 +167,25 @@
       state.booksIndex = await res.json();
 
       els.bookSelector.innerHTML = state.booksIndex.books
-        .map((b) => `<option value="${b.id}">${b.title} (${b.totalChapters}回)</option>`)
+        .map((b) => {
+          const unit = b.unitLabel || "章";
+          return `<option value="${b.id}">${b.title} (${b.totalChapters}${unit})</option>`;
+        })
         .join("");
 
-      if (state.booksIndex.books.length > 0) {
-        await loadBook(state.booksIndex.books[0].dataUrl);
+      // Check if URL hash specifies a bookId (#bookId/type/id or #type/id)
+      const hashParts = window.location.hash.slice(1).split("/");
+      let initialBook = state.booksIndex.books[0];
+      if (hashParts.length === 3) {
+        const matched = state.booksIndex.books.find((b) => b.id === hashParts[0]);
+        if (matched) {
+          initialBook = matched;
+          els.bookSelector.value = matched.id;
+        }
+      }
+
+      if (initialBook) {
+        await loadBook(initialBook.dataUrl, true);
       }
     } catch (err) {
       console.error("Failed to load books catalog:", err);
@@ -176,18 +194,48 @@
   }
 
   // Load Single Book Dataset
-  async function loadBook(dataUrl) {
+  async function loadBook(dataUrl, checkHash = false) {
     try {
       const res = await fetch(dataUrl);
       const book = await res.json();
       state.currentBook = book;
+      state.selectedCharacter = "";
+      state.searchQuery = "";
+      els.chapterSearch.value = "";
+      els.clearSearchBtn.classList.add("hidden");
+
+      const unit = book.unitLabel || "章";
+
+      // Update search placeholder dynamically
+      const sampleChars = (book.topCharacters || DEFAULT_CHARACTERS).slice(1, 4).join(" / ");
+      els.chapterSearch.placeholder = `搜索章节、人物、事件 (如: ${sampleChars})...`;
+
+      // Update topbar quick tabs dynamically for current book
+      const s0 = book.specialMaps[0] || { id: "overview", title: "全书总览" };
+      const s1 = book.specialMaps[1] || { id: "characters", title: "人物图谱" };
+      const s2 = book.specialMaps[2] || { id: "themes", title: "深度专题" };
+      const partLabel = book.partUnitLabel || `分卷脉络 (${book.parts.length}卷)`;
+      const chapLabel = `逐${unit}精析 (${book.totalChapters}${unit})`;
+
+      els.quickTabs.innerHTML = `
+        <button class="tab-btn active" data-type="special" data-id="${s0.id}">${s0.title}</button>
+        <button class="tab-btn" data-type="special" data-id="${s1.id}">${s1.title}</button>
+        <button class="tab-btn" data-type="special" data-id="${s2.id}">${s2.title}</button>
+        <button class="tab-btn" data-type="part" data-id="part-1">${partLabel}</button>
+        <button class="tab-btn" data-type="chapter" data-id="1">${chapLabel}</button>
+      `;
+      els.quickTabs.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectMapItem(btn.dataset.type, btn.dataset.id);
+        });
+      });
 
       // Render Book Meta Card
       els.bookTitle.textContent = book.title;
       els.bookAuthor.textContent = book.author;
       els.bookDesc.textContent = book.description;
       els.bookStats.innerHTML = [
-        `<span class="stat-chip">共 ${book.totalChapters} 回</span>`,
+        `<span class="stat-chip">共 ${book.totalChapters} ${unit}</span>`,
         `<span class="stat-chip">约 ${(book.totalWords / 10000).toFixed(1)} 万字</span>`,
         ...book.tags.map((t) => `<span class="stat-chip">${t}</span>`),
       ].join("");
@@ -195,8 +243,7 @@
       renderCharacterFilters();
       renderNavigationLists();
 
-      // Check URL Hash or default to overview
-      if (!applyUrlHash()) {
+      if (!checkHash || !applyUrlHash()) {
         selectMapItem("special", "overview");
       }
     } catch (err) {
@@ -206,11 +253,15 @@
 
   // Character filter tags
   function renderCharacterFilters() {
-    els.charFilterBar.innerHTML = TOP_CHARACTERS.map((ch) => {
-      const val = ch === "全部" ? "" : ch;
-      const isActive = state.selectedCharacter === val ? "active" : "";
-      return `<button class="char-tag ${isActive}" data-char="${val}">${ch}</button>`;
-    }).join("");
+    const chars =
+      (state.currentBook && state.currentBook.topCharacters) || DEFAULT_CHARACTERS;
+    els.charFilterBar.innerHTML = chars
+      .map((ch) => {
+        const val = ch === "全部" ? "" : ch;
+        const isActive = state.selectedCharacter === val ? "active" : "";
+        return `<button class="char-tag ${isActive}" data-char="${val}">${ch}</button>`;
+      })
+      .join("");
 
     els.charFilterBar.querySelectorAll(".char-tag").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -225,6 +276,7 @@
   function renderNavigationLists() {
     const book = state.currentBook;
     if (!book) return;
+    const unit = book.unitLabel || "章";
 
     // 1. Special Maps
     els.specialNavList.innerHTML = book.specialMaps
@@ -241,14 +293,14 @@
       )
       .join("");
 
-    // 2. Parts (5 Volumes)
+    // 2. Parts / Volumes
     els.partsNavList.innerHTML = book.parts
       .map(
         (p, idx) => `
       <button class="nav-item" data-type="part" data-id="${p.id}">
         <div class="nav-item-top">
-          <span class="nav-item-num">第${idx + 1}卷</span>
-          <span class="nav-item-title">第 ${p.range[0]}–${p.range[1]} 回脉络导图</span>
+          <span class="nav-item-num">第${idx + 1}部</span>
+          <span class="nav-item-title">${p.title}</span>
         </div>
         <div class="nav-item-sub">${p.subtitle}</div>
       </button>
@@ -256,7 +308,7 @@
       )
       .join("");
 
-    // 3. Chapters (1-100)
+    // 3. Chapters
     renderChaptersList();
 
     // Attach click handlers for special & parts
@@ -271,6 +323,7 @@
   function renderChaptersList() {
     const book = state.currentBook;
     if (!book) return;
+    const unit = book.unitLabel || "章";
 
     const q = state.searchQuery.trim().toLowerCase();
     const charFilter = state.selectedCharacter;
@@ -289,7 +342,7 @@
       );
     });
 
-    els.chapterCountBadge.textContent = `${filtered.length} / ${book.chapters.length}回`;
+    els.chapterCountBadge.textContent = `${filtered.length} / ${book.chapters.length}${unit}`;
 
     els.chaptersNavList.innerHTML = filtered
       .map(
@@ -318,6 +371,7 @@
   function selectMapItem(type, id) {
     const book = state.currentBook;
     if (!book) return;
+    const unit = book.unitLabel || "章";
 
     state.currentType = type;
     state.currentId = String(id);
@@ -337,11 +391,11 @@
       md = m.markdown;
     } else if (type === "part") {
       const p = book.parts.find((x) => x.id === id) || book.parts[0];
-      badge = `分卷导图 (${p.range[0]}-${p.range[1]}回)`;
+      badge = `分卷导图 (${p.range[0]}-${p.range[1]}${unit})`;
       title = p.title;
       summary = p.summary;
       md = p.markdown;
-      defaultCollapse = 3; // fold chapter details initially on 20-chapter part map for clarity
+      defaultCollapse = 3;
     } else if (type === "chapter") {
       const num = parseInt(id, 10);
       const ch = book.chapters.find((x) => x.num === num) || book.chapters[0];
@@ -362,7 +416,10 @@
 
     if (chars.length > 0) {
       els.currentCharactersBox.innerHTML = chars
-        .map((c) => `<span class="char-pill" data-char="${c}" title="点击筛选该人物相关章节">👤 ${c}</span>`)
+        .map(
+          (c) =>
+            `<span class="char-pill" data-char="${c}" title="点击筛选该人物相关章节">👤 ${c}</span>`
+        )
         .join("");
       els.currentCharactersBox.querySelectorAll(".char-pill").forEach((pill) => {
         pill.addEventListener("click", () => {
@@ -404,8 +461,8 @@
     updateStepButtons();
     renderMindmap(md, defaultCollapse);
 
-    // Update URL Hash without scrolling
-    history.replaceState(null, "", `#${type}/${id}`);
+    // Update URL Hash with bookId
+    history.replaceState(null, "", `#${book.id}/${type}/${id}`);
   }
 
   // Prev / Next sequential navigation
@@ -442,9 +499,12 @@
   function applyUrlHash() {
     const hash = window.location.hash.slice(1);
     if (!hash) return false;
-    const [type, id] = hash.split("/");
-    if (type && id) {
-      selectMapItem(type, id);
+    const parts = hash.split("/");
+    if (parts.length === 3) {
+      selectMapItem(parts[1], parts[2]);
+      return true;
+    } else if (parts.length === 2) {
+      selectMapItem(parts[0], parts[1]);
       return true;
     }
     return false;
@@ -452,6 +512,17 @@
 
   // Bind UI Events
   function bindEvents() {
+    // Book Selector Switcher!
+    els.bookSelector.addEventListener("change", async (e) => {
+      const selectedId = e.target.value;
+      const entry =
+        state.booksIndex &&
+        state.booksIndex.books.find((b) => b.id === selectedId);
+      if (entry) {
+        await loadBook(entry.dataUrl, false);
+      }
+    });
+
     // Search input
     els.chapterSearch.addEventListener("input", (e) => {
       state.searchQuery = e.target.value;
@@ -464,13 +535,6 @@
       state.searchQuery = "";
       els.clearSearchBtn.classList.add("hidden");
       renderChaptersList();
-    });
-
-    // Quick Tabs
-    els.quickTabs.querySelectorAll(".tab-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        selectMapItem(btn.dataset.type, btn.dataset.id);
-      });
     });
 
     // Prev / Next buttons
@@ -525,7 +589,9 @@
     // Export Markdown
     els.exportMdBtn.addEventListener("click", () => {
       if (!state.currentMarkdown) return;
-      const blob = new Blob([state.currentMarkdown], { type: "text/markdown;charset=utf-8" });
+      const blob = new Blob([state.currentMarkdown], {
+        type: "text/markdown;charset=utf-8",
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

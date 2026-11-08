@@ -32,6 +32,7 @@ ai-book-minimaps/
     │   └── app.js                    # Markmap 渲染、检索、人物筛选与书架控制逻辑
     └── data/
         ├── books.json                # 馆藏书架索引
+        ├── mingchao-naxieshier.json  # 《明朝那些事儿（图文增补全集）》全九部+156章完整导图数据
         └── jinpingmei-chongzhen.json # 《金瓶梅（崇祯本）》全书+百回完整导图数据
 ```
 
