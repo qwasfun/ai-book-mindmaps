@@ -158,12 +158,12 @@ body {
 
 .tab-btn.active {
   background: var(--accent-primary);
-  color: #fff;
+  color: #121318;
   font-weight: 600;
 }
 
-html[data-theme="dark"] .tab-btn.active {
-  color: #121318;
+html[data-theme="light"] .tab-btn.active {
+  color: #fff;
 }
 
 .icon-btn {
@@ -568,24 +568,29 @@ html[data-theme="light"] .char-tag.active {
   display: block;
 }
 
-/* Markmap custom text color for dark/light themes (id selector beats markmap's injected .markmap rules) */
+/* Markmap custom text color & font for both measurement container (.markmap-container) and SVG (#markmapSvg) */
+.markmap.markmap-container,
+.markmap,
 #markmapSvg {
   color: var(--text-primary);
   --markmap-text-color: var(--text-primary);
   --markmap-circle-open-bg: var(--bg-primary);
-  --markmap-font: 400 14px/20px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --markmap-font: 400 14px/21px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   --markmap-code-bg: var(--bg-tertiary);
   --markmap-code-color: var(--text-secondary);
 }
 
 .markmap-foreign {
-  font-size: 14px;
-  line-height: 1.45;
+  overflow: visible;
+}
+
+.markmap-foreign > div {
+  overflow: visible;
 }
 
 .markmap-foreign strong {
   color: var(--badge-text);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* Floating Controls */
@@ -958,11 +963,10 @@ html[data-theme="light"] .char-tag.active {
   }
 
   /* Mindmap */
+  .markmap.markmap-container,
+  .markmap,
   #markmapSvg {
-    --markmap-font: 400 12.5px/18px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-  }
-  .markmap-foreign {
-    font-size: 12.5px;
+    --markmap-font: 400 12.5px/19px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   }
   .canvas-controls {
     left: 50%;
