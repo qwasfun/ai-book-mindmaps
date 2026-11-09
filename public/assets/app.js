@@ -153,7 +153,7 @@
   }
 
   // Render Markdown into Interactive Markmap SVG
-  function renderMindmap(md, collapseDepth = 0) {
+  function renderMindmap(md, collapseDepth = 0, forceExpandAll = false) {
     if (!state.transformer || !window.markmap) {
       els.currentTitle.textContent = "正在等待导图组件加载...";
       return;
@@ -164,6 +164,13 @@
 
     if (collapseDepth > 0) {
       setCollapseDepth(root, 1, collapseDepth);
+    } else if (!forceExpandAll && root.children && root.children.length > 5) {
+      // 针对二级分支较多的长章节（如《明朝那些事儿》），桌面端默认展开前3个分支详情，其余折叠以保证字号清晰可读
+      root.children.forEach((child, idx) => {
+        if (idx >= 3 && child.payload) {
+          child.payload.fold = 1;
+        }
+      });
     }
 
     state.currentRoot = root;
@@ -174,11 +181,12 @@
         els.markmapSvg,
         {
           autoFit: true,
-          duration: 320,
-          maxWidth: isMobile() ? 230 : 360,
-          paddingX: isMobile() ? 10 : 16,
-          spacingVertical: isMobile() ? 6 : 8,
-          spacingHorizontal: isMobile() ? 40 : 68,
+          fitRatio: isMobile() ? 0.88 : 0.94,
+          duration: 260,
+          maxWidth: isMobile() ? 210 : 360,
+          paddingX: isMobile() ? 8 : 16,
+          spacingVertical: isMobile() ? 5 : 8,
+          spacingHorizontal: isMobile() ? 32 : 68,
         },
         root
       );
@@ -259,7 +267,7 @@
       const chapLabel = `逐${unit}精析 (${book.totalChapters}${unit})`;
 
       els.quickTabs.innerHTML = `
-        <button class="tab-btn active" data-type="special" data-id="${s0.id}">${s0.title}</button>
+        <button class="tab-btn" data-type="special" data-id="${s0.id}">${s0.title}</button>
         <button class="tab-btn" data-type="special" data-id="${s1.id}">${s1.title}</button>
         <button class="tab-btn" data-type="special" data-id="${s2.id}">${s2.title}</button>
         <button class="tab-btn" data-type="part" data-id="part-1">${partLabel}</button>
@@ -335,12 +343,17 @@
       .join("");
 
     // 2. Parts / Volumes
+    const partsTitleEl = document.getElementById("partsSectionTitle");
+    const chaptersTitleEl = document.getElementById("chaptersSectionTitle");
+    if (partsTitleEl) partsTitleEl.textContent = `分卷脉络导图（${book.parts.length} 卷）`;
+    if (chaptersTitleEl) chaptersTitleEl.textContent = `逐${unit}精细导图`;
+
     els.partsNavList.innerHTML = book.parts
       .map(
         (p, idx) => `
       <button class="nav-item" data-type="part" data-id="${p.id}">
         <div class="nav-item-top">
-          <span class="nav-item-num">第${idx + 1}部</span>
+          <span class="nav-item-num">${p.range[0]}–${p.range[1]}${unit}</span>
           <span class="nav-item-title">${p.title}</span>
         </div>
         <div class="nav-item-sub">${p.subtitle}</div>
@@ -423,6 +436,7 @@
     let chars = [];
     let md = "";
     let defaultCollapse = 0;
+    const mobile = isMobile();
 
     if (type === "special") {
       const m = book.specialMaps.find((x) => x.id === id) || book.specialMaps[0];
@@ -430,13 +444,15 @@
       title = `${book.title} · ${m.title}`;
       summary = m.description;
       md = m.markdown;
+      // 专题导图节点多，默认只展开前两层，点击节点可继续展开
+      defaultCollapse = mobile ? 2 : 3;
     } else if (type === "part") {
       const p = book.parts.find((x) => x.id === id) || book.parts[0];
       badge = `分卷导图 (${p.range[0]}-${p.range[1]}${unit})`;
       title = p.title;
       summary = p.summary;
       md = p.markdown;
-      defaultCollapse = 3;
+      defaultCollapse = mobile ? 2 : 3;
     } else if (type === "chapter") {
       const num = parseInt(id, 10);
       const ch = book.chapters.find((x) => x.num === num) || book.chapters[0];
@@ -445,7 +461,9 @@
       summary = ch.summary;
       chars = ch.characters || [];
       md = ch.markdown;
+      defaultCollapse = mobile ? 2 : 0;
     }
+    state.defaultCollapse = defaultCollapse;
 
     state.currentMarkdown = md;
     state.currentTitleText = title;
@@ -467,6 +485,7 @@
           state.selectedCharacter = pill.dataset.char;
           renderCharacterFilters();
           renderChaptersList();
+          if (isMobile()) setSidebar(true);
         });
       });
     } else {
@@ -481,7 +500,7 @@
         el.dataset.type === state.currentType && String(el.dataset.id) === state.currentId;
       el.classList.toggle("active", isMatch);
       if (isMatch) {
-        el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        el.scrollIntoView({ block: "nearest" });
       }
     });
 
@@ -508,7 +527,8 @@
     }
 
     // Update URL Hash with bookId
-    history.replaceState(null, "", `#${book.id}/${type}/${id}`);
+    state.lastHash = `#${book.id}/${type}/${id}`;
+    history.replaceState(null, "", state.lastHash);
   }
 
   // Prev / Next sequential navigation
@@ -620,7 +640,7 @@
       if (state.markmapInstance) state.markmapInstance.fit();
     });
     els.expandAllBtn.addEventListener("click", () => {
-      renderMindmap(state.currentMarkdown, 0);
+      renderMindmap(state.currentMarkdown, 0, true);
     });
     els.collapseLevelBtn.addEventListener("click", () => {
       renderMindmap(state.currentMarkdown, 2);
@@ -647,11 +667,36 @@
       URL.revokeObjectURL(url);
     });
 
-    // Theme Switcher
+    // Theme Switcher (persisted)
+    const applyThemeColor = () => {
+      const meta = document.querySelector('meta[name="theme-color"]');
+      const dark = document.documentElement.getAttribute("data-theme") === "dark";
+      if (meta) meta.setAttribute("content", dark ? "#161922" : "#efeadd");
+    };
+    applyThemeColor();
     els.themeToggleBtn.addEventListener("click", () => {
       const html = document.documentElement;
       const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
       html.setAttribute("data-theme", next);
+      try {
+        localStorage.setItem("mindmap-theme", next);
+      } catch (e) {}
+      applyThemeColor();
+    });
+
+    // 支持手动修改地址栏锚点 / 分享链接跳转
+    window.addEventListener("hashchange", async () => {
+      if (window.location.hash === state.lastHash || !state.booksIndex) return;
+      const parts = window.location.hash.slice(1).split("/");
+      if (parts.length === 3 && state.currentBook && parts[0] !== state.currentBook.id) {
+        const entry = state.booksIndex.books.find((b) => b.id === parts[0]);
+        if (entry) {
+          els.bookSelector.value = entry.id;
+          await loadBook(entry.dataUrl, true);
+          return;
+        }
+      }
+      applyUrlHash();
     });
 
     // Keyboard shortcuts
